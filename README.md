@@ -33,16 +33,23 @@ This tool was ran towards the popular vulnerable bank application, vulnbank buil
 
 Usage
 
-Run the auditor against a target API endpoint:
+## Usage
+
+TokenAudit v2.0 supports flexible command-line flags. You can pass target URLs, custom JWTs, and export reports directly to JSON files for documentation or pipeline integration.
+
+### 1. Run an Audit & Export to JSON
+```bash
+python3 auditor.py -u [https://vulnbank.org](https://vulnbank.org) -o report.json
+
+2. Audit a Custom JWT and Endpoint
 Bash
 
-python3 auditor.py [https://example.com](https://example.com)
+python3 auditor.py -u [https://api.example.com](https://api.example.com) -t "eyJhbGciOi..."
 
-Security Disclaimer
+3. View the Help Menu & Available Flags
+Bash
 
-This tool is intended strictly for educational and authorized security auditing purposes.
-
-
+python3 auditor.py --help
 ---
 
 ### **3. Initialize and Push to GitHub**
