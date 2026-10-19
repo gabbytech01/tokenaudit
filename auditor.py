@@ -1,44 +1,70 @@
+#!/usr/bin/env python3
 import sys
+import json
+import argparse
 import jwt
 import requests
+from datetime import datetime
 from jwt.exceptions import PyJWTError
 
 def audit_jwt(token):
+    report = {"algorithm": None, "payload": None, "vulnerabilities": []}
     print("\n[+] === JWT SECURITY AUDIT ===")
     
-    # 1. Decode without verification to inspect headers and payload
     try:
         unverified_header = jwt.get_unverified_header(token)
         unverified_payload = jwt.decode(token, options={"verify_signature": False})
         
-        print(f"    -> Algorithm Used: {unverified_header.get('alg')}")
+        alg = unverified_header.get("alg")
+        report["algorithm"] = alg
+        report["payload"] = unverified_payload
+        
+        print(f"    -> Algorithm Used: {alg}")
         print(f"    -> Token Payload: {unverified_payload}")
+        
+        # Check Expiration Claim (exp)
+        if "exp" in unverified_payload:
+            exp_timestamp = unverified_payload["exp"]
+            exp_date = datetime.fromtimestamp(exp_timestamp)
+            current_date = datetime.now()
+            if current_date > exp_date:
+                print("    [!] WARNING: Token is EXPIRED!")
+                report["vulnerabilities"].append("Token is expired but may still be accepted if server skips verification.")
+            else:
+                print(f"    [✔] Token expiration: Valid until {exp_date}")
+
     except Exception as e:
         print(f"[-] Error decoding token: {e}")
-        return
+        return report
 
     # VULN CHECK 1: 'alg: none' vulnerability
     alg = unverified_header.get("alg", "").lower()
     if alg == "none":
-        print("[!] CRITICAL VULNERABILITY: Token uses 'alg: none'. Server may accept unsigned tokens!")
+        msg = "CRITICAL: Token uses 'alg: none'. Server may accept unsigned tokens!"
+        print(f"[!] {msg}")
+        report["vulnerabilities"].append(msg)
     elif alg in ["hs256", "hs384", "hs512"]:
         print("[*] Info: Symmetric signing algorithm detected (HMAC). Testing for weak secrets...")
         
-        # VULN CHECK 2: Weak Secret Brute-Force (Common defaults)
-        common_secrets = ["secret", "password", "123456", "admin", "jwt_secret", "supersecret"]
+        common_secrets = ["secret", "password", "123456", "admin", "jwt_secret", "supersecret", "key"]
         cracked = False
         for secret in common_secrets:
             try:
                 jwt.decode(token, secret, algorithms=[unverified_header.get('alg')])
-                print(f"[!] HIGH VULNERABILITY: Weak secret found! Secret is: '{secret}'")
+                msg = f"HIGH: Weak secret found! Secret is: '{secret}'"
+                print(f"[!] {msg}")
+                report["vulnerabilities"].append(msg)
                 cracked = True
                 break
             except PyJWTError:
                 continue
         if not cracked:
             print("[+] Secure: No common weak secrets matched.")
+            
+    return report
 
 def audit_api_headers(url):
+    report = {"target_url": url, "headers_status": {}}
     print(f"\n[+] === API ENDPOINT SECURITY HEADERS: {url} ===")
     try:
         response = requests.get(url, timeout=5)
@@ -54,21 +80,32 @@ def audit_api_headers(url):
         for header, warning in security_headers.items():
             if header in headers:
                 print(f"    [✔] {header}: Present")
+                report["headers_status"][header] = "Present"
             else:
                 print(f"    [✘] {header}: ABSENT! -> {warning}")
+                report["headers_status"][header] = "Absent"
                 
     except requests.exceptions.RequestException as e:
         print(f"[-] Could not connect to target URL: {e}")
+        report["error"] = str(e)
+        
+    return report
 
 if __name__ == "__main__":
-    print("[*] TokenAudit Engine Initialized.")
+    parser = argparse.ArgumentParser(description="TokenAudit: Automated API & JWT Security Auditor")
+    parser.add_argument("-u", "--url", help="Target API endpoint URL to check headers", default="https://example.com")
+    parser.add_argument("-t", "--token", help="JWT token string to audit", default="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyIjoiYWRtaW4iLCJyb2xlIjoib3BlcmF0b3IifQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c")
+    parser.add_argument("-o", "--output", help="Save report to a JSON file", default=None)
     
-    # Example test JWT signed with 'secret' (HMAC-SHA256)
-    # Payload: {"user": "admin", "role": "operator"}
-    test_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyIjoiYWRtaW4iLCJyb2xlIjoib3BlcmF0b3IifQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c"
+    args = parser.parse_args()
     
-    audit_jwt(test_token)
+    print("[*] TokenAudit Engine v2.0 Initialized.")
     
-    # Test an API endpoint (e.g., example.com)
-    target_url = sys.argv[1] if len(sys.argv) > 1 else "https://example.com"
-    audit_api_headers(target_url)
+    jwt_report = audit_jwt(args.token)
+    api_report = audit_api_headers(args.url)
+    
+    if args.output:
+        full_report = {"jwt_audit": jwt_report, "api_audit": api_report}
+        with open(args.output, "w") as f:
+            json.dump(full_report, f, indent=4)
+        print(f"\n[+] Report successfully saved to {args.output}")
