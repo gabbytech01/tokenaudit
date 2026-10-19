@@ -2,6 +2,12 @@
 
 **TokenAudit** is a lightweight, Python-based Application Security auditing tool designed to detect JSON Web Token (JWT) misconfigurations and evaluate API endpoint security headers.
 
+# Example Output
+This tool was ran towards the popular vulnerable bank application, vulnbank built by @commando_skipzz
+
+<img width="1366" height="726" alt="VULNBANKAUDIT" src="https://github.com/user-attachments/assets/604e16fc-92ce-4b03-91a3-757702cf3e4b" />
+
+
 ## Features
 - **JWT Signature Verification Checks**: Identifies insecure `alg: none` header settings.
 - **Weak Secret Detection**: Brute-forces symmetric HMAC-SHA256 (`HS256`) signatures against common weak secrets.
