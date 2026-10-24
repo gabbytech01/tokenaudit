@@ -1,0 +1,7 @@
+{
+  "name": "acme-payments-api",
+  "dependencies": {
+    "express": "^4.20.0",
+    "lodash": "^4.17.21"
+  }
+}
